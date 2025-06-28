@@ -389,18 +389,33 @@ elif st.session_state.step == 4:
                     st.write(f"Debug: Target column: {target_col}")
                     st.write(f"Debug: DataFrame shape: {df.shape}")
                     
+                    st.write("Debug: About to call train_model...")
+                    
                     # Train model
-                    results = train_model(
-                        df, target_col, selected_features, problem_type, selected_model_code, test_size
-                    )
-                    model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
+                    try:
+                        results = train_model(
+                            df, target_col, selected_features, problem_type, selected_model_code, test_size
+                        )
+                        st.write("Debug: train_model completed successfully")
+                    except Exception as e:
+                        st.error(f"Debug: Error in train_model: {e}")
+                        raise
                     
-                    # Make predictions
-                    st.write(f"Debug: About to make predictions. X_test type: {type(X_test)}")
-                    if hasattr(X_test, 'shape'):
-                        st.write(f"Debug: X_test shape: {X_test.shape}")
+                    st.write("Debug: About to unpack results...")
+                    try:
+                        model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
+                        st.write("Debug: Results unpacked successfully")
+                    except Exception as e:
+                        st.error(f"Debug: Error unpacking results: {e}")
+                        raise
                     
-                    y_pred = model.predict(X_test)
+                    st.write("Debug: About to make predictions...")
+                    try:
+                        y_pred = model.predict(X_test)
+                        st.write("Debug: Predictions made successfully")
+                    except Exception as e:
+                        st.error(f"Debug: Error making predictions: {e}")
+                        raise
                     
                     # Store results
                     st.session_state.model = model
