@@ -396,6 +396,10 @@ elif st.session_state.step == 4:
                     model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
                     
                     # Make predictions
+                    st.write(f"Debug: About to make predictions. X_test type: {type(X_test)}")
+                    if hasattr(X_test, 'shape'):
+                        st.write(f"Debug: X_test shape: {X_test.shape}")
+                    
                     y_pred = model.predict(X_test)
                     
                     # Store results

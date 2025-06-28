@@ -224,7 +224,9 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     X_train_transformed = pipeline.named_steps['preprocessor'].transform(X_train)
     X_test_transformed = pipeline.named_steps['preprocessor'].transform(X_test)
     
-    return pipeline, X_train_transformed, X_test_transformed, y_train, y_test, preprocessor, label_encoder
+    # Return original DataFrames for X_train and X_test, not the transformed arrays
+    # The pipeline will handle the transformation internally when needed
+    return pipeline, X_train, X_test, y_train, y_test, preprocessor, label_encoder
 
 def evaluate_model(y_true, y_pred, problem_type):
     """
