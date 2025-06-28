@@ -121,10 +121,16 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     """
     Train a machine learning model based on the problem type and selected model.
     """
-    # Prepare features
-    X, y, preprocessor, categorical_features, numerical_features = prepare_features(
-        df, feature_columns, target_column
-    )
+    # Ensure df is a DataFrame and feature_columns is a list
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("Input data must be a pandas DataFrame")
+    
+    if isinstance(feature_columns, str):
+        feature_columns = [feature_columns]
+    
+    # Prepare features - work directly with DataFrame
+    X = df[feature_columns].copy()
+    y = df[target_column].copy()
     
     # Handle target variable for classification
     label_encoder = None
@@ -132,9 +138,22 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(y)
     
-    # Split the data
+    # Split the data BEFORE any transformation
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=42, stratify=y if problem_type == "classification" else None
+    )
+    
+    # Identify categorical and numerical columns from the original DataFrame
+    categorical_features = X.select_dtypes(include=['object']).columns.tolist()
+    numerical_features = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    
+    # Create preprocessing pipeline
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), numerical_features),
+            ('cat', OneHotEncoder(drop='first', handle_unknown='ignore'), categorical_features)
+        ],
+        remainder='passthrough'
     )
     
     # Get the selected model
@@ -149,9 +168,9 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     # Fit the pipeline
     pipeline.fit(X_train, y_train)
     
-    # Transform data for evaluation
-    X_train_transformed = preprocessor.fit_transform(X_train)
-    X_test_transformed = preprocessor.transform(X_test)
+    # Transform data for evaluation (using the fitted pipeline's preprocessor)
+    X_train_transformed = pipeline.named_steps['preprocessor'].transform(X_train)
+    X_test_transformed = pipeline.named_steps['preprocessor'].transform(X_test)
     
     return pipeline, X_train_transformed, X_test_transformed, y_train, y_test, preprocessor, label_encoder
 
@@ -184,10 +203,15 @@ def get_feature_importance(model, feature_names, preprocessor):
     Extract feature importance from the trained model.
     """
     # Get the actual model from pipeline
-    rf_model = model.named_steps['model']
+    ml_model = model.named_steps['model']
+    
+    # Check if model has feature importance
+    if not hasattr(ml_model, 'feature_importances_'):
+        # For models without feature importance, return empty dict
+        return {}
     
     # Get feature importance
-    importance = rf_model.feature_importances_
+    importance = ml_model.feature_importances_
     
     # Get feature names after preprocessing
     try:

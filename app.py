@@ -441,9 +441,15 @@ elif st.session_state.step == 4:
                     
                     # Feature importance
                     st.subheader("🎯 Feature Importance")
-                    importance_scores = get_feature_importance(model, selected_features, preprocessor)
-                    importance_fig = create_feature_importance_plot(importance_scores)
-                    st.pyplot(importance_fig)
+                    try:
+                        importance_scores = get_feature_importance(model, selected_features, preprocessor)
+                        if importance_scores:
+                            importance_fig = create_feature_importance_plot(importance_scores)
+                            st.pyplot(importance_fig)
+                        else:
+                            st.info("Feature importance is not available for this model type.")
+                    except Exception as e:
+                        st.warning(f"Could not generate feature importance: {str(e)}")
                     
                     # Navigation
                     if st.button("View Results & Downloads ➡️"):
