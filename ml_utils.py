@@ -254,35 +254,49 @@ def get_feature_importance(model, feature_names, preprocessor):
     """
     Extract feature importance from the trained model.
     """
+    print(f"Debug: get_feature_importance called")
+    print(f"Debug: feature_names type: {type(feature_names)}, value: {feature_names}")
+    
     # Get the actual model from pipeline
     ml_model = model.named_steps['model']
+    print(f"Debug: Model extracted: {type(ml_model)}")
     
     # Check if model has feature importance
     if not hasattr(ml_model, 'feature_importances_'):
-        # For models without feature importance, return empty dict
+        print(f"Debug: Model does not have feature_importances_")
         return {}
     
     # Get feature importance
     importance = ml_model.feature_importances_
+    print(f"Debug: Feature importance shape: {importance.shape}")
     
     # Get feature names after preprocessing
     try:
+        print(f"Debug: Trying to get feature names from preprocessor")
         # Try to get feature names from preprocessor
         if hasattr(preprocessor, 'get_feature_names_out'):
+            print(f"Debug: Preprocessor has get_feature_names_out method")
             feature_names_transformed = preprocessor.get_feature_names_out()
+            print(f"Debug: Got transformed feature names: {feature_names_transformed}")
         else:
+            print(f"Debug: Preprocessor does not have get_feature_names_out, using original")
             # Fallback: use original feature names
             feature_names_transformed = feature_names
-    except:
+    except Exception as e:
+        print(f"Debug: Error getting feature names from preprocessor: {e}")
         # If preprocessing fails, use original feature names
         feature_names_transformed = feature_names[:len(importance)]
     
+    print(f"Debug: Final feature names length: {len(feature_names_transformed)}, importance length: {len(importance)}")
+    
     # Create feature importance dictionary
     if len(feature_names_transformed) != len(importance):
+        print(f"Debug: Mismatch in lengths, creating generic names")
         # Handle mismatch in feature names
         feature_names_transformed = [f"Feature_{i}" for i in range(len(importance))]
     
     importance_dict = dict(zip(feature_names_transformed, importance))
+    print(f"Debug: Created importance dict with {len(importance_dict)} items")
     
     # Sort by importance
     importance_dict = dict(sorted(importance_dict.items(), key=lambda x: x[1], reverse=True))
