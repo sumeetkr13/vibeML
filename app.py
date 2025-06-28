@@ -60,6 +60,13 @@ def download_button(data, filename, label):
     
     st.markdown(href, unsafe_allow_html=True)
 
+def save_plot_to_bytes(fig):
+    """Convert matplotlib figure to bytes for download"""
+    img_buffer = io.BytesIO()
+    fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+    img_buffer.seek(0)
+    return img_buffer.getvalue()
+
 # Main title
 st.title("📊 CSV Machine Learning Analyzer")
 st.markdown("Upload your CSV file and build machine learning models with automated analysis and visualizations!")
@@ -383,39 +390,14 @@ elif st.session_state.step == 4:
         if st.button("🚀 Train Model"):
             with st.spinner("Training model... This may take a few minutes."):
                 try:
-                    # Debug information
-                    st.write(f"Debug: DataFrame type: {type(df)}")
-                    st.write(f"Debug: Features type: {type(selected_features)}")
-                    st.write(f"Debug: Target column: {target_col}")
-                    st.write(f"Debug: DataFrame shape: {df.shape}")
-                    
-                    st.write("Debug: About to call train_model...")
-                    
                     # Train model
-                    try:
-                        results = train_model(
-                            df, target_col, selected_features, problem_type, selected_model_code, test_size
-                        )
-                        st.write("Debug: train_model completed successfully")
-                    except Exception as e:
-                        st.error(f"Debug: Error in train_model: {e}")
-                        raise
+                    results = train_model(
+                        df, target_col, selected_features, problem_type, selected_model_code, test_size
+                    )
+                    model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
                     
-                    st.write("Debug: About to unpack results...")
-                    try:
-                        model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
-                        st.write("Debug: Results unpacked successfully")
-                    except Exception as e:
-                        st.error(f"Debug: Error unpacking results: {e}")
-                        raise
-                    
-                    st.write("Debug: About to make predictions...")
-                    try:
-                        y_pred = model.predict(X_test)
-                        st.write("Debug: Predictions made successfully")
-                    except Exception as e:
-                        st.error(f"Debug: Error making predictions: {e}")
-                        raise
+                    # Make predictions
+                    y_pred = model.predict(X_test)
                     
                     # Store results
                     st.session_state.model = model
@@ -539,10 +521,13 @@ elif st.session_state.step == 5:
         # Visualizations
         st.subheader("📈 Visualizations")
         
-        # Generate all plots
+        # Generate all plots and store for download
+        charts = {}
+        
         if st.session_state.problem_type == "classification":
             cm_fig = create_confusion_matrix(st.session_state.y_test, st.session_state.y_pred)
             st.pyplot(cm_fig)
+            charts["confusion_matrix"] = cm_fig
         else:
             perf_fig = create_performance_plots(
                 st.session_state.y_test, 
@@ -550,6 +535,7 @@ elif st.session_state.step == 5:
                 st.session_state.problem_type
             )
             st.pyplot(perf_fig)
+            charts["performance_plots"] = perf_fig
         
         # Feature importance
         importance_scores = get_feature_importance(
@@ -557,8 +543,10 @@ elif st.session_state.step == 5:
             st.session_state.selected_features,
             st.session_state.preprocessor
         )
-        importance_fig = create_feature_importance_plot(importance_scores)
-        st.pyplot(importance_fig)
+        if importance_scores:
+            importance_fig = create_feature_importance_plot(importance_scores)
+            st.pyplot(importance_fig)
+            charts["feature_importance"] = importance_fig
         
         # Downloads section
         st.subheader("💾 Download Results")
@@ -645,6 +633,23 @@ Feature Importance (Top 10):
                 file_name=f"predictions_{st.session_state.target_col}.csv",
                 mime="text/csv"
             )
+        
+        # Chart Downloads
+        if charts:
+            st.subheader("📈 Download Charts")
+            
+            chart_cols = st.columns(len(charts))
+            for i, (chart_name, fig) in enumerate(charts.items()):
+                with chart_cols[i]:
+                    chart_bytes = save_plot_to_bytes(fig)
+                    chart_title = chart_name.replace('_', ' ').title()
+                    
+                    st.download_button(
+                        label=f"📊 {chart_title}",
+                        data=chart_bytes,
+                        file_name=f"{chart_name}_{st.session_state.target_col}.png",
+                        mime="image/png"
+                    )
         
         # Navigation
         st.subheader("🔄 Next Steps")

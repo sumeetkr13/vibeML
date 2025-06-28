@@ -121,10 +121,6 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     """
     Train a machine learning model based on the problem type and selected model.
     """
-    print(f"Debug: train_model called with df type: {type(df)}")
-    print(f"Debug: feature_columns type: {type(feature_columns)}, value: {feature_columns}")
-    print(f"Debug: target_column: {target_column}")
-    
     # Ensure df is a DataFrame and feature_columns is a list
     if not isinstance(df, pd.DataFrame):
         raise ValueError("Input data must be a pandas DataFrame")
@@ -132,62 +128,33 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     if isinstance(feature_columns, str):
         feature_columns = [feature_columns]
     
-    print(f"Debug: About to select features from DataFrame")
-    print(f"Debug: DataFrame columns: {list(df.columns)}")
-    print(f"Debug: Selected features: {feature_columns}")
-    
     # Prepare features and target - keep as DataFrame/Series
-    try:
-        X = df[feature_columns].copy()
-        print(f"Debug: X created successfully, type: {type(X)}, shape: {X.shape}")
-    except Exception as e:
-        print(f"Debug: Error creating X: {e}")
-        raise
-    
-    try:
-        y = df[target_column].copy()
-        print(f"Debug: y created successfully, type: {type(y)}, shape: {y.shape}")
-    except Exception as e:
-        print(f"Debug: Error creating y: {e}")
-        raise
+    X = df[feature_columns].copy()
+    y = df[target_column].copy()
     
     # Handle target variable for classification
     label_encoder = None
     if problem_type == "classification" and y.dtype == 'object':
-        print(f"Debug: Encoding target variable")
         label_encoder = LabelEncoder()
         y = pd.Series(label_encoder.fit_transform(y), index=y.index)
-        print(f"Debug: Target encoded, new type: {type(y)}")
     
-    print(f"Debug: About to split data")
     # Generate train/test indices to maintain DataFrame structure
-    try:
-        train_idx, test_idx = train_test_split(
-            df.index, test_size=test_size, random_state=42, 
-            stratify=y if problem_type == "classification" else None
-        )
-        print(f"Debug: Split successful, train indices: {len(train_idx)}, test indices: {len(test_idx)}")
-    except Exception as e:
-        print(f"Debug: Error in train_test_split: {e}")
-        raise
+    train_idx, test_idx = train_test_split(
+        df.index, test_size=test_size, random_state=42, 
+        stratify=y if problem_type == "classification" else None
+    )
     
     # Use index slicing to keep DataFrames
-    print(f"Debug: Creating train/test sets")
     X_train = X.loc[train_idx].copy()
     X_test = X.loc[test_idx].copy()
     y_train = y.loc[train_idx].copy()
     y_test = y.loc[test_idx].copy()
-    print(f"Debug: Train/test sets created. X_train type: {type(X_train)}, shape: {X_train.shape}")
     
     # Identify categorical and numerical columns from the original DataFrame
-    print(f"Debug: Identifying feature types")
     categorical_features = X.select_dtypes(include=['object']).columns.tolist()
     numerical_features = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    print(f"Debug: Categorical features: {categorical_features}")
-    print(f"Debug: Numerical features: {numerical_features}")
     
     # Create preprocessing pipeline
-    print(f"Debug: Creating preprocessor")
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', StandardScaler(), numerical_features),
@@ -195,30 +162,18 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
         ],
         remainder='passthrough'
     )
-    print(f"Debug: Preprocessor created")
     
     # Get the selected model
-    print(f"Debug: Getting model: {model_code}")
     model = get_model(model_code, problem_type)
-    print(f"Debug: Model created: {type(model)}")
     
     # Create pipeline with preprocessing
-    print(f"Debug: Creating pipeline")
     pipeline = Pipeline([
         ('preprocessor', preprocessor),
         ('model', model)
     ])
-    print(f"Debug: Pipeline created")
     
-    # Fit the pipeline - X_train is still a DataFrame here
-    print(f"Debug: About to fit pipeline. X_train type: {type(X_train)}")
-    print(f"Debug: X_train columns: {list(X_train.columns)}")
-    try:
-        pipeline.fit(X_train, y_train)
-        print(f"Debug: Pipeline fitted successfully")
-    except Exception as e:
-        print(f"Debug: Error fitting pipeline: {e}")
-        raise
+    # Fit the pipeline
+    pipeline.fit(X_train, y_train)
     
     # Transform data for evaluation (using the fitted pipeline's preprocessor)
     X_train_transformed = pipeline.named_steps['preprocessor'].transform(X_train)
@@ -256,49 +211,34 @@ def get_feature_importance(model, feature_names, preprocessor):
     """
     Extract feature importance from the trained model.
     """
-    print(f"Debug: get_feature_importance called")
-    print(f"Debug: feature_names type: {type(feature_names)}, value: {feature_names}")
-    
     # Get the actual model from pipeline
     ml_model = model.named_steps['model']
-    print(f"Debug: Model extracted: {type(ml_model)}")
     
     # Check if model has feature importance
     if not hasattr(ml_model, 'feature_importances_'):
-        print(f"Debug: Model does not have feature_importances_")
         return {}
     
     # Get feature importance
     importance = ml_model.feature_importances_
-    print(f"Debug: Feature importance shape: {importance.shape}")
     
     # Get feature names after preprocessing
     try:
-        print(f"Debug: Trying to get feature names from preprocessor")
         # Try to get feature names from preprocessor
         if hasattr(preprocessor, 'get_feature_names_out'):
-            print(f"Debug: Preprocessor has get_feature_names_out method")
             feature_names_transformed = preprocessor.get_feature_names_out()
-            print(f"Debug: Got transformed feature names: {feature_names_transformed}")
         else:
-            print(f"Debug: Preprocessor does not have get_feature_names_out, using original")
             # Fallback: use original feature names
             feature_names_transformed = feature_names
     except Exception as e:
-        print(f"Debug: Error getting feature names from preprocessor: {e}")
         # If preprocessing fails, use original feature names
         feature_names_transformed = feature_names[:len(importance)]
     
-    print(f"Debug: Final feature names length: {len(feature_names_transformed)}, importance length: {len(importance)}")
-    
     # Create feature importance dictionary
     if len(feature_names_transformed) != len(importance):
-        print(f"Debug: Mismatch in lengths, creating generic names")
         # Handle mismatch in feature names
         feature_names_transformed = [f"Feature_{i}" for i in range(len(importance))]
     
     importance_dict = dict(zip(feature_names_transformed, importance))
-    print(f"Debug: Created importance dict with {len(importance_dict)} items")
     
     # Sort by importance
     importance_dict = dict(sorted(importance_dict.items(), key=lambda x: x[1], reverse=True))

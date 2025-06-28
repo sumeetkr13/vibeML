@@ -84,7 +84,29 @@ The application is designed for deployment on Replit with the following characte
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### June 28, 2025 - Feature Complete
+- **Fixed critical DataFrame column specification error** that was preventing model training
+- **Added multiple ML model support**: Random Forest, Logistic/Linear Regression, SVM, Gradient Boosting, KNN
+- **Implemented chart download functionality** for all visualizations (confusion matrix, performance plots, feature importance)
+- **Enhanced error handling** throughout the pipeline with comprehensive debugging
+- **Resolved data flow issues** by maintaining DataFrame structure through index-based train/test splitting
+- **Completed full ML workflow**: data upload → preprocessing → model selection → training → evaluation → downloads
+
+### Key Technical Fixes
+- Modified train_model() to use index-based splitting instead of direct data splitting
+- Ensured DataFrame column names are preserved throughout the pipeline
+- Added chart-to-bytes conversion for downloadable PNG files
+- Implemented safe error handling for models without feature importance
+
+### User Features Added
+- Model selection dropdown with 5 different algorithms per problem type
+- High-resolution chart downloads (300 DPI PNG format)
+- Comprehensive performance reports with feature importance rankings
+- CSV export of predictions with residuals for regression problems
+
 ## Changelog
 
-Changelog:
-- June 28, 2025. Initial setup
+- June 28, 2025: Initial setup and core functionality
+- June 28, 2025: Feature complete with model selection and chart downloads
