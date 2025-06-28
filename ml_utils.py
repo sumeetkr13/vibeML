@@ -154,26 +154,40 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     # Handle target variable for classification
     label_encoder = None
     if problem_type == "classification" and y.dtype == 'object':
+        print(f"Debug: Encoding target variable")
         label_encoder = LabelEncoder()
         y = pd.Series(label_encoder.fit_transform(y), index=y.index)
+        print(f"Debug: Target encoded, new type: {type(y)}")
     
+    print(f"Debug: About to split data")
     # Generate train/test indices to maintain DataFrame structure
-    train_idx, test_idx = train_test_split(
-        df.index, test_size=test_size, random_state=42, 
-        stratify=y if problem_type == "classification" else None
-    )
+    try:
+        train_idx, test_idx = train_test_split(
+            df.index, test_size=test_size, random_state=42, 
+            stratify=y if problem_type == "classification" else None
+        )
+        print(f"Debug: Split successful, train indices: {len(train_idx)}, test indices: {len(test_idx)}")
+    except Exception as e:
+        print(f"Debug: Error in train_test_split: {e}")
+        raise
     
     # Use index slicing to keep DataFrames
+    print(f"Debug: Creating train/test sets")
     X_train = X.loc[train_idx].copy()
     X_test = X.loc[test_idx].copy()
     y_train = y.loc[train_idx].copy()
     y_test = y.loc[test_idx].copy()
+    print(f"Debug: Train/test sets created. X_train type: {type(X_train)}, shape: {X_train.shape}")
     
     # Identify categorical and numerical columns from the original DataFrame
+    print(f"Debug: Identifying feature types")
     categorical_features = X.select_dtypes(include=['object']).columns.tolist()
     numerical_features = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    print(f"Debug: Categorical features: {categorical_features}")
+    print(f"Debug: Numerical features: {numerical_features}")
     
     # Create preprocessing pipeline
+    print(f"Debug: Creating preprocessor")
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', StandardScaler(), numerical_features),
@@ -181,18 +195,30 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
         ],
         remainder='passthrough'
     )
+    print(f"Debug: Preprocessor created")
     
     # Get the selected model
+    print(f"Debug: Getting model: {model_code}")
     model = get_model(model_code, problem_type)
+    print(f"Debug: Model created: {type(model)}")
     
     # Create pipeline with preprocessing
+    print(f"Debug: Creating pipeline")
     pipeline = Pipeline([
         ('preprocessor', preprocessor),
         ('model', model)
     ])
+    print(f"Debug: Pipeline created")
     
     # Fit the pipeline - X_train is still a DataFrame here
-    pipeline.fit(X_train, y_train)
+    print(f"Debug: About to fit pipeline. X_train type: {type(X_train)}")
+    print(f"Debug: X_train columns: {list(X_train.columns)}")
+    try:
+        pipeline.fit(X_train, y_train)
+        print(f"Debug: Pipeline fitted successfully")
+    except Exception as e:
+        print(f"Debug: Error fitting pipeline: {e}")
+        raise
     
     # Transform data for evaluation (using the fitted pipeline's preprocessor)
     X_train_transformed = pipeline.named_steps['preprocessor'].transform(X_train)
