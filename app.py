@@ -100,51 +100,81 @@ if st.sidebar.button("🔄 Start Over"):
 if st.session_state.step == 1:
     st.header("Step 1: Upload Your CSV File")
     
+    # Privacy and storage notice
+    st.info("🔒 **Privacy Notice:** Your data is processed temporarily in memory only. No files are permanently stored on our servers.")
+    
     uploaded_file = st.file_uploader(
         "Choose a CSV file",
         type=['csv'],
-        help="Maximum file size: 50MB"
+        help="Maximum file size: 200MB. Supported formats: CSV with UTF-8, Latin-1, or CP1252 encoding."
     )
     
     if uploaded_file is not None:
-        # Check file size (50MB limit)
-        if uploaded_file.size > 50 * 1024 * 1024:
-            st.error("File size exceeds 50MB limit. Please upload a smaller file.")
-        else:
-            try:
-                # Try different encodings
-                encodings = ['utf-8', 'latin-1', 'cp1252']
+        try:
+            # Check file size (200MB limit)
+            file_size_mb = uploaded_file.size / (1024 * 1024)
+            
+            if uploaded_file.size > 200 * 1024 * 1024:
+                st.error(f"❌ **File too large:** Your file is {file_size_mb:.1f}MB. Please upload a file smaller than 200MB.")
+                st.info("💡 **Tip:** You can reduce file size by removing unnecessary columns or sampling fewer rows.")
+            else:
+                # Show file info
+                st.success(f"✅ File uploaded: {uploaded_file.name} ({file_size_mb:.1f}MB)")
+                
+                # Try to read CSV with different encodings
+                encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
                 df = None
+                used_encoding = None
+                error_occurred = False
                 
-                for encoding in encodings:
-                    try:
-                        uploaded_file.seek(0)
-                        df = pd.read_csv(uploaded_file, encoding=encoding)
-                        break
-                    except UnicodeDecodeError:
-                        continue
+                with st.spinner("Reading CSV file..."):
+                    for encoding in encodings:
+                        try:
+                            uploaded_file.seek(0)
+                            df = pd.read_csv(uploaded_file, encoding=encoding)
+                            used_encoding = encoding
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                        except pd.errors.EmptyDataError:
+                            st.error("❌ **Empty file:** The uploaded CSV file appears to be empty.")
+                            error_occurred = True
+                            break
+                        except pd.errors.ParserError as e:
+                            st.error(f"❌ **File format error:** Could not parse CSV file. {str(e)}")
+                            error_occurred = True
+                            break
+                        except MemoryError:
+                            st.error("❌ **Memory error:** File is too large to process. Please upload a smaller file or reduce the number of rows/columns.")
+                            error_occurred = True
+                            break
+                        except Exception as e:
+                            continue
                 
-                if df is None:
-                    st.error("Could not read the CSV file. Please check the file format and encoding.")
-                else:
-                    st.session_state.data = df
-                    st.success(f"✅ File uploaded successfully! Shape: {df.shape}")
-                    
-                    # Show basic info
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Rows", df.shape[0])
-                    with col2:
-                        st.metric("Columns", df.shape[1])
-                    with col3:
-                        st.metric("Missing Values", df.isnull().sum().sum())
-                    
-                    if st.button("Continue to Data Preview ➡️"):
-                        st.session_state.step = 2
-                        st.rerun()
+                if not error_occurred:
+                    if df is None:
+                        st.error("❌ **Encoding error:** Could not read the CSV file with standard encodings (UTF-8, Latin-1, CP1252, ISO-8859-1).")
+                        st.info("💡 **Try:** Re-saving your file as UTF-8 encoded CSV in Excel or your spreadsheet program.")
+                    else:
+                        st.session_state.data = df
+                        st.success(f"✅ File read successfully using {used_encoding} encoding! Shape: {df.shape}")
                         
-            except Exception as e:
-                st.error(f"Error reading CSV file: {str(e)}")
+                        # Show basic info
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Rows", df.shape[0])
+                        with col2:
+                            st.metric("Columns", df.shape[1])
+                        with col3:
+                            st.metric("Missing Values", df.isnull().sum().sum())
+                        
+                        if st.button("Continue to Data Preview ➡️"):
+                            st.session_state.step = 2
+                            st.rerun()
+                        
+        except Exception as e:
+            st.error(f"❌ **Unexpected error:** {str(e)}")
+            st.info("💡 **Please try:** Uploading a different CSV file or checking the file format.")
 
 # Step 2: Data Preview & Missing Values
 elif st.session_state.step == 2:
