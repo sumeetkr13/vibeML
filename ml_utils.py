@@ -121,6 +121,10 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     """
     Train a machine learning model based on the problem type and selected model.
     """
+    print(f"Debug: train_model called with df type: {type(df)}")
+    print(f"Debug: feature_columns type: {type(feature_columns)}, value: {feature_columns}")
+    print(f"Debug: target_column: {target_column}")
+    
     # Ensure df is a DataFrame and feature_columns is a list
     if not isinstance(df, pd.DataFrame):
         raise ValueError("Input data must be a pandas DataFrame")
@@ -128,9 +132,24 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     if isinstance(feature_columns, str):
         feature_columns = [feature_columns]
     
+    print(f"Debug: About to select features from DataFrame")
+    print(f"Debug: DataFrame columns: {list(df.columns)}")
+    print(f"Debug: Selected features: {feature_columns}")
+    
     # Prepare features and target - keep as DataFrame/Series
-    X = df[feature_columns].copy()
-    y = df[target_column].copy()
+    try:
+        X = df[feature_columns].copy()
+        print(f"Debug: X created successfully, type: {type(X)}, shape: {X.shape}")
+    except Exception as e:
+        print(f"Debug: Error creating X: {e}")
+        raise
+    
+    try:
+        y = df[target_column].copy()
+        print(f"Debug: y created successfully, type: {type(y)}, shape: {y.shape}")
+    except Exception as e:
+        print(f"Debug: Error creating y: {e}")
+        raise
     
     # Handle target variable for classification
     label_encoder = None

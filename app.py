@@ -383,6 +383,12 @@ elif st.session_state.step == 4:
         if st.button("🚀 Train Model"):
             with st.spinner("Training model... This may take a few minutes."):
                 try:
+                    # Debug information
+                    st.write(f"Debug: DataFrame type: {type(df)}")
+                    st.write(f"Debug: Features type: {type(selected_features)}")
+                    st.write(f"Debug: Target column: {target_col}")
+                    st.write(f"Debug: DataFrame shape: {df.shape}")
+                    
                     # Train model
                     results = train_model(
                         df, target_col, selected_features, problem_type, selected_model_code, test_size
