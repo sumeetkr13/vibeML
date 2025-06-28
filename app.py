@@ -387,7 +387,7 @@ elif st.session_state.step == 4:
         
         st.info(f"🤖 **Selected Model:** {selected_model_name}")
         
-        if st.button("🚀 Train Model"):
+        if st.button("🚀 Train Model", key="train_model_button"):
             with st.spinner("Training model... This may take a few minutes."):
                 try:
                     # Train model
@@ -438,7 +438,7 @@ elif st.session_state.step == 4:
                     st.info("✅ Model training completed! Click below to view detailed results, visualizations, and download options.")
                     
                     # Navigation
-                    if st.button("View Results & Downloads ➡️"):
+                    if st.button("View Results & Downloads ➡️", key="results_button_after_training"):
                         st.session_state.step = 5
                         st.rerun()
                         
@@ -449,13 +449,13 @@ elif st.session_state.step == 4:
         # Navigation buttons (always available)
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("⬅️ Back to Feature Selection"):
+            if st.button("⬅️ Back to Feature Selection", key="back_to_features_step4"):
                 st.session_state.step = 3
                 st.rerun()
         with col2:
             # Show results button if model has been trained
             if hasattr(st.session_state, 'model') and st.session_state.model is not None:
-                if st.button("View Results & Downloads ➡️"):
+                if st.button("View Results & Downloads ➡️", key="results_button_navigation"):
                     st.session_state.step = 5
                     st.rerun()
             else:
