@@ -128,7 +128,7 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     if isinstance(feature_columns, str):
         feature_columns = [feature_columns]
     
-    # Prepare features - work directly with DataFrame
+    # Prepare features and target - keep as DataFrame/Series
     X = df[feature_columns].copy()
     y = df[target_column].copy()
     
@@ -136,12 +136,19 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     label_encoder = None
     if problem_type == "classification" and y.dtype == 'object':
         label_encoder = LabelEncoder()
-        y = label_encoder.fit_transform(y)
+        y = pd.Series(label_encoder.fit_transform(y), index=y.index)
     
-    # Split the data BEFORE any transformation
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42, stratify=y if problem_type == "classification" else None
+    # Generate train/test indices to maintain DataFrame structure
+    train_idx, test_idx = train_test_split(
+        df.index, test_size=test_size, random_state=42, 
+        stratify=y if problem_type == "classification" else None
     )
+    
+    # Use index slicing to keep DataFrames
+    X_train = X.loc[train_idx].copy()
+    X_test = X.loc[test_idx].copy()
+    y_train = y.loc[train_idx].copy()
+    y_test = y.loc[test_idx].copy()
     
     # Identify categorical and numerical columns from the original DataFrame
     categorical_features = X.select_dtypes(include=['object']).columns.tolist()
@@ -165,7 +172,7 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
         ('model', model)
     ])
     
-    # Fit the pipeline
+    # Fit the pipeline - X_train is still a DataFrame here
     pipeline.fit(X_train, y_train)
     
     # Transform data for evaluation (using the fitted pipeline's preprocessor)
