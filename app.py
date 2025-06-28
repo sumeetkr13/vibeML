@@ -447,19 +447,9 @@ elif st.session_state.step == 4:
                     st.error("Please check your data and feature selection.")
         
         # Navigation buttons (always available)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("⬅️ Back to Feature Selection", key="back_to_features_step4"):
-                st.session_state.step = 3
-                st.rerun()
-        with col2:
-            # Show results button if model has been trained
-            if hasattr(st.session_state, 'model') and st.session_state.model is not None:
-                if st.button("View Results & Downloads ➡️", key="results_button_navigation"):
-                    st.session_state.step = 5
-                    st.rerun()
-            else:
-                st.write("") # Empty space for alignment
+        if st.button("⬅️ Back to Feature Selection", key="back_to_features_step4"):
+            st.session_state.step = 3
+            st.rerun()
 
 # Step 5: Results & Downloads
 elif st.session_state.step == 5:
