@@ -415,8 +415,8 @@ elif st.session_state.step == 4:
                     metrics = evaluate_model(y_test, y_pred, problem_type)
                     st.session_state.metrics = metrics
                     
-                    # Display results
-                    st.subheader("📊 Model Performance")
+                    # Display quick results preview
+                    st.subheader("📊 Quick Performance Summary")
                     
                     if problem_type == "classification":
                         col1, col2, col3 = st.columns(3)
@@ -426,12 +426,6 @@ elif st.session_state.step == 4:
                             st.metric("Precision", f"{metrics['precision']:.3f}")
                         with col3:
                             st.metric("Recall", f"{metrics['recall']:.3f}")
-                        
-                        # Confusion matrix
-                        st.subheader("🔥 Confusion Matrix")
-                        cm_fig = create_confusion_matrix(y_test, y_pred)
-                        st.pyplot(cm_fig)
-                        
                     else:  # regression
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -440,23 +434,8 @@ elif st.session_state.step == 4:
                             st.metric("RMSE", f"{metrics['rmse']:.3f}")
                         with col3:
                             st.metric("MAE", f"{metrics['mae']:.3f}")
-                        
-                        # Actual vs Predicted plot
-                        st.subheader("📈 Actual vs Predicted")
-                        perf_fig = create_performance_plots(y_test, y_pred, problem_type)
-                        st.pyplot(perf_fig)
                     
-                    # Feature importance
-                    st.subheader("🎯 Feature Importance")
-                    try:
-                        importance_scores = get_feature_importance(model, selected_features, preprocessor)
-                        if importance_scores:
-                            importance_fig = create_feature_importance_plot(importance_scores)
-                            st.pyplot(importance_fig)
-                        else:
-                            st.info("Feature importance is not available for this model type.")
-                    except Exception as e:
-                        st.warning(f"Could not generate feature importance: {str(e)}")
+                    st.info("✅ Model training completed! Click below to view detailed results, visualizations, and download options.")
                     
                     # Navigation
                     if st.button("View Results & Downloads ➡️"):
