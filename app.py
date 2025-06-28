@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import io
 import base64
 from ml_utils import (
@@ -161,7 +162,7 @@ elif st.session_state.step == 2:
             st.write("**Data Types:**")
             st.dataframe(pd.DataFrame({
                 'Column': df.columns,
-                'Data Type': df.dtypes,
+                'Data Type': df.dtypes.astype(str),
                 'Non-Null Count': df.count(),
                 'Null Count': df.isnull().sum()
             }))
@@ -271,7 +272,12 @@ elif st.session_state.step == 3:
             else:
                 st.info(f"🔍 **Detected Problem Type:** Regression")
                 st.write("Target variable distribution:")
-                st.histogram_chart(df[target_col].dropna())
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.hist(df[target_col].dropna(), bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+                ax.set_xlabel(target_col)
+                ax.set_ylabel('Frequency')
+                ax.set_title(f'Distribution of {target_col}')
+                st.pyplot(fig)
             
             # Feature selection
             st.write("**Select Feature Variables (predictors):**")
@@ -290,14 +296,40 @@ elif st.session_state.step == 3:
                 # Show feature info
                 feature_info = pd.DataFrame({
                     'Feature': selected_features,
-                    'Data Type': [df[col].dtype for col in selected_features],
+                    'Data Type': [str(df[col].dtype) for col in selected_features],
                     'Non-Null Count': [df[col].count() for col in selected_features],
                     'Unique Values': [df[col].nunique() for col in selected_features]
                 })
                 st.dataframe(feature_info, use_container_width=True)
                 
-                # Test size selection
+                # Model selection
                 st.subheader("⚙️ Model Configuration")
+                
+                # Model type selection
+                if problem_type == "classification":
+                    model_options = {
+                        "Random Forest": "rf",
+                        "Logistic Regression": "lr", 
+                        "Support Vector Machine": "svm",
+                        "Gradient Boosting": "gb",
+                        "K-Nearest Neighbors": "knn"
+                    }
+                else:  # regression
+                    model_options = {
+                        "Random Forest": "rf",
+                        "Linear Regression": "lr",
+                        "Support Vector Regression": "svr", 
+                        "Gradient Boosting": "gb",
+                        "K-Nearest Neighbors": "knn"
+                    }
+                
+                selected_model = st.selectbox(
+                    "Choose Model Type:",
+                    list(model_options.keys()),
+                    help="Select the machine learning algorithm to use"
+                )
+                
+                # Test size selection
                 test_size = st.slider(
                     "Test Set Size (percentage):",
                     min_value=10,
@@ -312,6 +344,8 @@ elif st.session_state.step == 3:
                 st.session_state.selected_features = selected_features
                 st.session_state.problem_type = problem_type
                 st.session_state.test_size = test_size
+                st.session_state.selected_model_name = selected_model
+                st.session_state.selected_model_code = model_options[selected_model]
                 
                 # Navigation buttons
                 col1, col2 = st.columns(2)
@@ -341,14 +375,19 @@ elif st.session_state.step == 4:
         selected_features = st.session_state.selected_features
         problem_type = st.session_state.problem_type
         test_size = st.session_state.test_size
+        selected_model_name = getattr(st.session_state, 'selected_model_name', 'Random Forest')
+        selected_model_code = getattr(st.session_state, 'selected_model_code', 'rf')
+        
+        st.info(f"🤖 **Selected Model:** {selected_model_name}")
         
         if st.button("🚀 Train Model"):
             with st.spinner("Training model... This may take a few minutes."):
                 try:
                     # Train model
-                    model, X_train, X_test, y_train, y_test, preprocessor = train_model(
-                        df, target_col, selected_features, problem_type, test_size
+                    results = train_model(
+                        df, target_col, selected_features, problem_type, selected_model_code, test_size
                     )
+                    model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
                     
                     # Make predictions
                     y_pred = model.predict(X_test)
@@ -361,6 +400,7 @@ elif st.session_state.step == 4:
                     st.session_state.y_test = y_test
                     st.session_state.y_pred = y_pred
                     st.session_state.preprocessor = preprocessor
+                    st.session_state.label_encoder = label_encoder
                     
                     st.success("✅ Model trained successfully!")
                     
@@ -497,23 +537,36 @@ elif st.session_state.step == 5:
         with col1:
             st.write("**📊 Performance Report**")
             
-            # Generate text report
-            report = f"""Machine Learning Model Report
+            # Generate text report safely
+            try:
+                total_samples = len(st.session_state.processed_data) if st.session_state.processed_data is not None else 0
+                num_features = len(st.session_state.selected_features) if hasattr(st.session_state, 'selected_features') and st.session_state.selected_features else 0
+                target_col = getattr(st.session_state, 'target_col', 'Unknown')
+                problem_type = getattr(st.session_state, 'problem_type', 'Unknown')
+                test_size = getattr(st.session_state, 'test_size', 0.2)
+                train_samples = len(st.session_state.X_train) if hasattr(st.session_state, 'X_train') and st.session_state.X_train is not None else 0
+                test_samples = len(st.session_state.X_test) if hasattr(st.session_state, 'X_test') and st.session_state.X_test is not None else 0
+                model_name = getattr(st.session_state, 'selected_model_name', 'Random Forest')
+                
+                report = f"""Machine Learning Model Report
 =====================================
 
 Dataset Information:
-- Total samples: {len(st.session_state.processed_data)}
-- Features: {len(st.session_state.selected_features)}
-- Target variable: {st.session_state.target_col}
-- Problem type: {st.session_state.problem_type}
+- Total samples: {total_samples}
+- Features: {num_features}
+- Target variable: {target_col}
+- Problem type: {problem_type}
 
 Model Configuration:
-- Train/Test split: {int((1-st.session_state.test_size)*100)}/{int(st.session_state.test_size*100)}
-- Training samples: {len(st.session_state.X_train)}
-- Test samples: {len(st.session_state.X_test)}
+- Model type: {model_name}
+- Train/Test split: {int((1-test_size)*100)}/{int(test_size*100)}
+- Training samples: {train_samples}
+- Test samples: {test_samples}
 
 Performance Metrics:
 """
+            except Exception as e:
+                report = f"Error generating report: {str(e)}\n"
             
             for metric, value in metrics.items():
                 report += f"- {metric.replace('_', ' ').title()}: {value:.4f}\n"

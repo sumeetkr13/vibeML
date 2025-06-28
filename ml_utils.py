@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingClassifier, GradientBoostingRegressor
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.svm import SVC, SVR
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -91,9 +94,32 @@ def prepare_features(df, feature_columns, target_column):
     
     return X, y, preprocessor, categorical_features, numerical_features
 
-def train_model(df, target_column, feature_columns, problem_type, test_size=0.2):
+def get_model(model_code, problem_type):
     """
-    Train a machine learning model based on the problem type.
+    Get the appropriate model based on model code and problem type.
+    """
+    if problem_type == "classification":
+        models = {
+            "rf": RandomForestClassifier(n_estimators=100, random_state=42, max_depth=10, min_samples_split=5, min_samples_leaf=2),
+            "lr": LogisticRegression(random_state=42, max_iter=1000),
+            "svm": SVC(random_state=42, probability=True),
+            "gb": GradientBoostingClassifier(random_state=42, n_estimators=100),
+            "knn": KNeighborsClassifier(n_neighbors=5)
+        }
+    else:  # regression
+        models = {
+            "rf": RandomForestRegressor(n_estimators=100, random_state=42, max_depth=10, min_samples_split=5, min_samples_leaf=2),
+            "lr": LinearRegression(),
+            "svr": SVR(kernel='rbf'),
+            "gb": GradientBoostingRegressor(random_state=42, n_estimators=100),
+            "knn": KNeighborsRegressor(n_neighbors=5)
+        }
+    
+    return models.get(model_code, models["rf"])  # Default to Random Forest
+
+def train_model(df, target_column, feature_columns, problem_type, model_code="rf", test_size=0.2):
+    """
+    Train a machine learning model based on the problem type and selected model.
     """
     # Prepare features
     X, y, preprocessor, categorical_features, numerical_features = prepare_features(
@@ -101,6 +127,7 @@ def train_model(df, target_column, feature_columns, problem_type, test_size=0.2)
     )
     
     # Handle target variable for classification
+    label_encoder = None
     if problem_type == "classification" and y.dtype == 'object':
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(y)
@@ -110,23 +137,8 @@ def train_model(df, target_column, feature_columns, problem_type, test_size=0.2)
         X, y, test_size=test_size, random_state=42, stratify=y if problem_type == "classification" else None
     )
     
-    # Create and train model
-    if problem_type == "classification":
-        model = RandomForestClassifier(
-            n_estimators=100,
-            random_state=42,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2
-        )
-    else:  # regression
-        model = RandomForestRegressor(
-            n_estimators=100,
-            random_state=42,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2
-        )
+    # Get the selected model
+    model = get_model(model_code, problem_type)
     
     # Create pipeline with preprocessing
     pipeline = Pipeline([
@@ -141,7 +153,7 @@ def train_model(df, target_column, feature_columns, problem_type, test_size=0.2)
     X_train_transformed = preprocessor.fit_transform(X_train)
     X_test_transformed = preprocessor.transform(X_test)
     
-    return pipeline, X_train_transformed, X_test_transformed, y_train, y_test, preprocessor
+    return pipeline, X_train_transformed, X_test_transformed, y_train, y_test, preprocessor, label_encoder
 
 def evaluate_model(y_true, y_pred, problem_type):
     """
@@ -151,9 +163,15 @@ def evaluate_model(y_true, y_pred, problem_type):
     
     if problem_type == "classification":
         metrics['accuracy'] = accuracy_score(y_true, y_pred)
-        metrics['precision'] = precision_score(y_true, y_pred, average='weighted', zero_division=0)
-        metrics['recall'] = recall_score(y_true, y_pred, average='weighted', zero_division=0)
-        metrics['f1'] = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+        try:
+            metrics['precision'] = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+            metrics['recall'] = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+            metrics['f1'] = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+        except TypeError:
+            # Fallback for older sklearn versions
+            metrics['precision'] = precision_score(y_true, y_pred, average='weighted')
+            metrics['recall'] = recall_score(y_true, y_pred, average='weighted')
+            metrics['f1'] = f1_score(y_true, y_pred, average='weighted')
     else:  # regression
         metrics['r2'] = r2_score(y_true, y_pred)
         metrics['rmse'] = np.sqrt(mean_squared_error(y_true, y_pred))
