@@ -86,11 +86,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### June 28, 2025 - Feature Complete
+### June 28, 2025 - Feature Complete with Enhanced Downloads
 - **Fixed critical DataFrame column specification error** that was preventing model training
 - **Added multiple ML model support**: Random Forest, Logistic/Linear Regression, SVM, Gradient Boosting, KNN
 - **Implemented chart download functionality** for all visualizations (confusion matrix, performance plots, feature importance)
-- **Enhanced error handling** throughout the pipeline with comprehensive debugging
+- **Enhanced file upload with comprehensive error handling** for large files, encoding issues, and memory errors
+- **Added privacy notice** clarifying temporary in-memory processing with no permanent storage
+- **Implemented separate train/test prediction downloads** with clear labeling of which set is used for metrics
+- **Confirmed performance metrics calculation on test set** with explicit comments in code
 - **Resolved data flow issues** by maintaining DataFrame structure through index-based train/test splitting
 - **Completed full ML workflow**: data upload → preprocessing → model selection → training → evaluation → downloads
 
