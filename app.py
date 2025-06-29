@@ -4,17 +4,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 import io
 import base64
+import uuid
+from datetime import datetime
 from ml_utils import (detect_problem_type, handle_missing_values, train_model,
                       evaluate_model, get_feature_importance)
 from visualization_utils import (create_confusion_matrix,
                                  create_feature_importance_plot,
                                  create_performance_plots,
-                                 create_data_overview_plots)
+                                 create_data_overview_plots,
+                                 create_probability_plots)
+from auth_utils import (is_session_valid, show_login_page, show_user_info, 
+                        logout_user, create_default_users)
+from logging_utils import (log_user_activity, log_app_event, log_performance, log_error,
+                          log_login, log_logout, log_data_upload, log_demo_data_load,
+                          log_step_transition, log_model_training, log_model_error,
+                          log_download, track_time, get_log_stats)
 
 # Configure page
 st.set_page_config(page_title="ML CSV Analyzer", page_icon="📊", layout="wide")
 
+# Check authentication first
+if not is_session_valid():
+    show_login_page()
+    st.stop()
+
+# Show user info in sidebar
+show_user_info()
+
 # Initialize session state
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+    # Log session start
+    log_app_event("session_start", "New user session started")
+
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'processed_data' not in st.session_state:
@@ -25,13 +47,29 @@ if 'predictions' not in st.session_state:
     st.session_state.predictions = None
 if 'step' not in st.session_state:
     st.session_state.step = 1
+    
+# Track step transitions
+if 'previous_step' not in st.session_state:
+    st.session_state.previous_step = 1
+elif st.session_state.previous_step != st.session_state.step:
+    log_step_transition(st.session_state.previous_step, st.session_state.step)
+    st.session_state.previous_step = st.session_state.step
 
 
 def reset_state():
-    """Reset all session state variables"""
+    """Reset ML analysis session state variables while preserving authentication"""
+    # Variables to preserve (authentication and session tracking)
+    preserve_keys = [
+        'step', 'authenticated', 'username', 'full_name', 'role', 'login_time', 
+        'session_id', 'previous_step'
+    ]
+    
+    # Only delete ML analysis-related variables
     for key in list(st.session_state.keys()):
-        if key not in ['step']:
+        if key not in preserve_keys:
             del st.session_state[key]
+    
+    # Reset specific ML variables to None
     st.session_state.data = None
     st.session_state.processed_data = None
     st.session_state.model = None
@@ -63,8 +101,12 @@ def save_plot_to_bytes(fig):
 # Main title
 st.title("📊 Simple Machine Learning on CSV Data")
 st.markdown(
-    "Upload your CSV file and build machine learning models with automated analysis and visualizations! \n \n Currently supports classification and regression problems with a single label variable and multiple features."
+    f"Welcome **{st.session_state.full_name}**! Upload your CSV file and build machine learning models with automated analysis and visualizations! \n \n Currently supports classification and regression problems with a single label variable and multiple features."
 )
+
+# Demo dataset notice
+if st.session_state.step == 1:
+    st.success("🎯 **New:** Try our demo personality dataset to explore all features before uploading your own data!")
 
 # Sidebar for navigation
 st.sidebar.title("Navigation")
@@ -87,7 +129,32 @@ for i, step_name in enumerate(steps, 1):
 if st.sidebar.button("🔄 Start Over"):
     reset_state()
     st.session_state.step = 1
+    log_user_activity("analysis_reset", "User started new analysis (reset state)")
     st.rerun()
+
+# Admin section (only for admin users)
+if hasattr(st.session_state, 'role') and st.session_state.role == 'admin':
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Admin Dashboard")
+    
+    if st.sidebar.button("📋 View Log Stats"):
+        try:
+            stats = get_log_stats()
+            st.sidebar.success("📋 **Log Statistics:**")
+            for log_file, data in stats.items():
+                st.sidebar.write(f"**{log_file}:** {data['total_events']} events ({data['file_size_mb']} MB)")
+        except Exception as e:
+            st.sidebar.error(f"Error loading log stats: {str(e)}")
+    
+    if st.sidebar.button("📈 Show Activity Summary"):
+        st.sidebar.info("Activity tracking enabled. Check logs/ directory for detailed analytics.")
+    
+    if st.sidebar.button("🌐 Show Current IP"):
+        from logging_utils import get_client_ip
+        current_ip = get_client_ip()
+        st.sidebar.success(f"**Current IP:** {current_ip}")
+        if st.sidebar.button("📋 Log IP Test"):
+            log_user_activity("ip_test", f"Admin tested IP logging from {current_ip}")
 
 # Step 1: Upload Data
 if st.session_state.step == 1:
@@ -95,15 +162,86 @@ if st.session_state.step == 1:
 
     # Privacy and storage notice
     st.info(
-        "🔒 **Privacy Notice:** Your data is processed temporarily in memory only. No files are permanently stored on our servers."
+        "🔒 **Privacy Notice:** Your data is processed temporarily in memory only. No files are permanently stored on our servers. We log basic usage analytics for security and performance monitoring."
     )
 
-    uploaded_file = st.file_uploader(
-        "Choose a CSV file",
-        type=['csv'],
-        help=
-        "Maximum file size: 200MB. Supported formats: CSV with UTF-8, Latin-1, or CP1252 encoding."
+    # Option to choose between upload and demo data
+    data_source = st.radio(
+        "Choose your data source:",
+        ["📁 Upload your own CSV file", "🎯 Use demo dataset (Personality Classification)"],
+        help="Try the demo dataset to explore the app's features before uploading your own data"
     )
+
+    if data_source == "📁 Upload your own CSV file":
+        uploaded_file = st.file_uploader(
+            "Choose a CSV file",
+            type=['csv'],
+            help=
+            "Maximum file size: 200MB. Supported formats: CSV with UTF-8, Latin-1, or CP1252 encoding."
+        )
+    else:
+        # Demo dataset option
+        st.info("📊 **Demo Dataset:** This is a personality classification dataset with 2,901 samples predicting Introvert vs Extrovert based on social behavior patterns.")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Samples", "2,901")
+        with col2:
+            st.metric("Features", "7")
+        with col3:
+            st.metric("Target", "Personality")
+        
+        # Feature descriptions
+        with st.expander("📋 View Dataset Features"):
+            st.markdown("""
+            **Features included:**
+            - **Time_spent_Alone**: Hours spent alone (0-10)
+            - **Stage_fear**: Has stage fear (Yes/No)
+            - **Social_event_attendance**: Frequency of attending social events (0-10)
+            - **Going_outside**: Frequency of going outside (0-7)
+            - **Drained_after_socializing**: Feels drained after socializing (Yes/No)
+            - **Friends_circle_size**: Number of friends (0-15)
+            - **Post_frequency**: Social media posting frequency (0-10)
+            
+            **Target Variable:**
+            - **Personality**: Introvert or Extrovert
+            
+            *Perfect for testing binary classification with custom thresholds!*
+            """)
+        
+        if st.button("🚀 Load Demo Dataset", key="load_demo_data"):
+            try:
+                df = pd.read_csv("dummy_kaggle.csv")
+                st.session_state.data = df
+                log_demo_data_load()
+                st.success(f"✅ Demo dataset loaded successfully! Shape: {df.shape}")
+                st.rerun()  # Refresh to show the loaded data
+            except Exception as e:
+                log_error("demo_data_load_error", "Failed to load demo dataset", error=e)
+                st.error(f"❌ Error loading demo dataset: {str(e)}")
+        
+        uploaded_file = None  # Set to None so the upload logic doesn't run
+
+    # Show demo dataset info and continue button if demo data is loaded
+    if data_source == "🎯 Use demo dataset (Personality Classification)" and st.session_state.data is not None:
+        df = st.session_state.data
+        
+        # Show basic info
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Rows", df.shape[0])
+        with col2:
+            st.metric("Columns", df.shape[1])
+        with col3:
+            st.metric("Missing Values", df.isnull().sum().sum())
+        
+        # Show a preview of the data
+        st.write("**Data Preview:**")
+        st.dataframe(df.head(), use_container_width=True)
+        
+        if st.button("Continue to Data Preview ➡️", key="continue_demo_to_preview"):
+            st.session_state.step = 2
+            st.rerun()
 
     if uploaded_file is not None:
         try:
@@ -169,6 +307,13 @@ if st.session_state.step == 1:
                         )
                     else:
                         st.session_state.data = df
+                        # Log file upload
+                        log_data_upload(
+                            filename=uploaded_file.name,
+                            file_size=uploaded_file.size,
+                            shape=df.shape,
+                            encoding=used_encoding
+                        )
                         st.success(
                             f"✅ File read successfully using {used_encoding} encoding! Shape: {df.shape}"
                         )
@@ -183,7 +328,7 @@ if st.session_state.step == 1:
                             st.metric("Missing Values",
                                       df.isnull().sum().sum())
 
-                        if st.button("Continue to Data Preview ➡️"):
+                        if st.button("Continue to Data Preview ➡️", key="continue_to_preview_step1"):
                             st.session_state.step = 2
                             st.rerun()
 
@@ -198,7 +343,7 @@ elif st.session_state.step == 2:
     if st.session_state.data is None:
         st.error(
             "No data found. Please go back to Step 1 and upload a CSV file.")
-        if st.button("⬅️ Back to Upload"):
+        if st.button("⬅️ Back to Upload", key="back_to_upload_step2"):
             st.session_state.step = 1
             st.rerun()
     else:
@@ -268,7 +413,7 @@ elif st.session_state.step == 2:
                     missing_strategies[col] = strategy
 
                 # Apply missing value handling
-                if st.button("Apply Missing Value Handling"):
+                if st.button("Apply Missing Value Handling", key="apply_missing_values"):
                     try:
                         processed_df = handle_missing_values(
                             df, missing_strategies)
@@ -288,14 +433,14 @@ elif st.session_state.step == 2:
         # Navigation buttons
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("⬅️ Back to Upload"):
+            if st.button("⬅️ Back to Upload", key="back_to_upload_nav_step2"):
                 st.session_state.step = 1
                 st.rerun()
         with col2:
             data_to_use = st.session_state.processed_data if st.session_state.processed_data is not None else df
             if len(missing_cols
                    ) == 0 or st.session_state.processed_data is not None:
-                if st.button("Continue to Feature Selection ➡️"):
+                if st.button("Continue to Feature Selection ➡️", key="continue_to_features_step2"):
                     if st.session_state.processed_data is None:
                         st.session_state.processed_data = df
                     st.session_state.step = 3
@@ -307,7 +452,7 @@ elif st.session_state.step == 3:
         st.error(
             "No processed data found. Please go back and complete the previous steps."
         )
-        if st.button("⬅️ Back to Data Preview"):
+        if st.button("⬅️ Back to Data Preview", key="back_to_preview_step3"):
             st.session_state.step = 2
             st.rerun()
     else:
@@ -423,11 +568,11 @@ elif st.session_state.step == 3:
                 # Navigation buttons
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("⬅️ Back to Data Preview"):
+                    if st.button("⬅️ Back to Data Preview", key="back_to_preview_nav_step3"):
                         st.session_state.step = 2
                         st.rerun()
                 with col2:
-                    if st.button("Train Model ➡️"):
+                    if st.button("Train Model ➡️", key="train_model_nav_step3"):
                         st.session_state.step = 4
                         st.rerun()
 
@@ -439,7 +584,7 @@ elif st.session_state.step == 4:
         st.error(
             "Missing required data. Please go back and complete the previous steps."
         )
-        if st.button("⬅️ Back to Feature Selection"):
+        if st.button("⬅️ Back to Feature Selection", key="back_to_features_step4"):
             st.session_state.step = 3
             st.rerun()
     else:
@@ -467,8 +612,33 @@ elif st.session_state.step == 4:
                     model, X_train, X_test, y_train, y_test, preprocessor, label_encoder = results
 
                     # Make predictions on both train and test sets
-                    y_pred_test = model.predict(X_test)
-                    y_pred_train = model.predict(X_train)
+                    if problem_type == "classification":
+                        # Use predict_proba for classification to get probabilities
+                        y_pred_proba_test = model.predict_proba(X_test)
+                        y_pred_proba_train = model.predict_proba(X_train)
+                        
+                        # Store probabilities for download
+                        st.session_state.y_pred_proba_test = y_pred_proba_test
+                        st.session_state.y_pred_proba_train = y_pred_proba_train
+                        st.session_state.class_names = model.classes_
+                        
+                        # Calculate baseline threshold from training data class distribution
+                        baseline_threshold = y_train.mean()
+                        st.session_state.baseline_threshold = baseline_threshold
+                        
+                        # Convert probabilities to predictions using custom threshold
+                        if len(model.classes_) == 2:  # Binary classification
+                            # Use probability of positive class (class 1)
+                            y_pred_test = (y_pred_proba_test[:, 1] > baseline_threshold).astype(int)
+                            y_pred_train = (y_pred_proba_train[:, 1] > baseline_threshold).astype(int)
+                        else:  # Multi-class classification
+                            # Use argmax for multi-class (standard approach)
+                            y_pred_test = model.predict(X_test)
+                            y_pred_train = model.predict(X_train)
+                    else:
+                        # For regression, use regular predict
+                        y_pred_test = model.predict(X_test)
+                        y_pred_train = model.predict(X_train)
 
                     # Store results
                     st.session_state.model = model
@@ -485,8 +655,30 @@ elif st.session_state.step == 4:
                     st.success("✅ Model trained successfully!")
 
                     # Evaluate model on TEST SET (confirms metrics are calculated on test data)
-                    metrics = evaluate_model(y_test, y_pred_test, problem_type)
+                    if problem_type == "classification":
+                        # Pass probabilities and threshold for better evaluation
+                        if len(model.classes_) == 2 and hasattr(st.session_state, 'baseline_threshold'):
+                            # Binary classification with custom threshold
+                            metrics = evaluate_model(y_test, y_pred_proba_test, problem_type, 
+                                                    threshold=baseline_threshold, 
+                                                    class_names=model.classes_)
+                        else:
+                            # Multi-class classification (use argmax)
+                            metrics = evaluate_model(y_test, y_pred_proba_test, problem_type, 
+                                                    class_names=model.classes_)
+                    else:
+                        # Regression: use regular predictions
+                        metrics = evaluate_model(y_test, y_pred_test, problem_type)
                     st.session_state.metrics = metrics
+
+                    # Log successful model training
+                    log_model_training(
+                        model_type=selected_model_name,
+                        problem_type=problem_type,
+                        dataset_shape=df.shape,
+                        test_size=test_size,
+                        metrics=metrics
+                    )
 
                     # Display quick results preview
                     st.subheader("📊 Quick Performance Summary")
@@ -514,6 +706,12 @@ elif st.session_state.step == 4:
                     )
 
                 except Exception as e:
+                    # Log model training error
+                    log_model_error(
+                        model_type=selected_model_name,
+                        problem_type=problem_type,
+                        error=e
+                    )
                     st.error(f"Error training model: {str(e)}")
                     st.error("Please check your data and feature selection.")
 
@@ -540,7 +738,7 @@ elif st.session_state.step == 5:
     if st.session_state.model is None:
         st.error(
             "No trained model found. Please go back and train a model first.")
-        if st.button("⬅️ Back to Model Training"):
+        if st.button("⬅️ Back to Model Training", key="back_to_training_step5"):
             st.session_state.step = 4
             st.rerun()
     else:
@@ -599,6 +797,18 @@ elif st.session_state.step == 5:
                                              st.session_state.y_pred)
             st.pyplot(cm_fig)
             charts["confusion_matrix"] = cm_fig
+            
+            # Add probability plots if probabilities are available
+            if hasattr(st.session_state, 'y_pred_proba_test') and hasattr(st.session_state, 'class_names'):
+                st.write("---")
+                st.write("**🎯 Probability Analysis:**")
+                prob_fig = create_probability_plots(
+                    st.session_state.y_test, 
+                    st.session_state.y_pred_proba_test, 
+                    st.session_state.class_names
+                )
+                st.pyplot(prob_fig)
+                charts["probability_plots"] = prob_fig
         else:
             perf_fig = create_performance_plots(st.session_state.y_test,
                                                 st.session_state.y_pred,
@@ -668,6 +878,16 @@ Performance Metrics:
             for metric, value in metrics.items():
                 report += f"- {metric.replace('_', ' ').title()}: {value:.4f}\n"
 
+            # Add threshold information for binary classification
+            if (problem_type == "classification" and 
+                hasattr(st.session_state, 'baseline_threshold') and 
+                hasattr(st.session_state, 'class_names') and 
+                len(st.session_state.class_names) == 2):
+                report += f"\nBinary Classification Configuration:\n"
+                report += f"- Baseline threshold (from training data): {st.session_state.baseline_threshold:.4f}\n"
+                report += f"- Class names: {list(st.session_state.class_names)}\n"
+                report += f"- Threshold method: Training data class proportion\n"
+
             report += f"""
 Selected Features:
 {chr(10).join([f"- {feature}" for feature in st.session_state.selected_features])}
@@ -692,6 +912,9 @@ Feature Importance (Top 10):
         with col2:
             st.write("**📊 Predictions Download**")
             
+            if st.session_state.problem_type == "classification":
+                st.info("📋 **Classification Downloads Include:** Actual labels, predicted labels, probability for each class, max probability (confidence), predicted class probability, and threshold information for binary classification.")
+            
             # Test Set Predictions
             st.write("*Test Set Predictions (used for performance metrics):*")
             test_predictions_df = pd.DataFrame({
@@ -699,7 +922,28 @@ Feature Importance (Top 10):
                 'Predicted': st.session_state.y_pred_test
             })
 
-            if st.session_state.problem_type == "regression":
+            if st.session_state.problem_type == "classification":
+                # Add probability columns for each class
+                if hasattr(st.session_state, 'y_pred_proba_test') and hasattr(st.session_state, 'class_names'):
+                    for i, class_name in enumerate(st.session_state.class_names):
+                        test_predictions_df[f'Prob_Class_{class_name}'] = st.session_state.y_pred_proba_test[:, i]
+                    
+                    # Add max probability (confidence)
+                    test_predictions_df['Max_Probability'] = st.session_state.y_pred_proba_test.max(axis=1)
+                    
+                    # Add predicted class probability (probability of the predicted class)
+                    predicted_class_probs = []
+                    for i, pred in enumerate(st.session_state.y_pred_test):
+                        class_index = list(st.session_state.class_names).index(pred)
+                        predicted_class_probs.append(st.session_state.y_pred_proba_test[i, class_index])
+                    test_predictions_df['Predicted_Class_Probability'] = predicted_class_probs
+                    
+                    # Add threshold information for binary classification
+                    if len(st.session_state.class_names) == 2 and hasattr(st.session_state, 'baseline_threshold'):
+                        test_predictions_df['Baseline_Threshold'] = st.session_state.baseline_threshold
+                        test_predictions_df['Above_Threshold'] = st.session_state.y_pred_proba_test[:, 1] > st.session_state.baseline_threshold
+                        
+            elif st.session_state.problem_type == "regression":
                 test_predictions_df['Residual'] = test_predictions_df['Actual'] - test_predictions_df['Predicted']
                 test_predictions_df['Absolute_Error'] = abs(test_predictions_df['Residual'])
 
@@ -763,7 +1007,7 @@ Feature Importance (Top 10):
                 st.session_state.step = 4
                 st.rerun()
         with col2:
-            if st.button("🔄 Start New Analysis"):
+            if st.button("🔄 Start New Analysis", key="start_new_analysis"):
                 reset_state()
                 st.session_state.step = 1
                 st.rerun()

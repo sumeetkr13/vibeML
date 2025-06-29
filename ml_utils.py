@@ -31,9 +31,9 @@ def detect_problem_type(target_series):
     unique_values = target_clean.nunique()
     total_values = len(target_clean)
     
-    # If unique values are less than 10% of total values and less than 20, classify as classification
-    if unique_values < 20 and unique_values / total_values < 0.1:
-        return "classification"
+    # # If unique values are less than 10% of total values and less than 20, classify as classification
+    # if unique_values < 20 and unique_values / total_values < 0.1:
+    #     return "classification"
     
     # Check if all values are integers (could be classification)
     if target_clean.dtype in ['int64', 'int32'] and unique_values <= 10:
@@ -183,13 +183,35 @@ def train_model(df, target_column, feature_columns, problem_type, model_code="rf
     # The pipeline will handle the transformation internally when needed
     return pipeline, X_train, X_test, y_train, y_test, preprocessor, label_encoder
 
-def evaluate_model(y_true, y_pred, problem_type):
+def evaluate_model(y_true, y_pred_or_proba, problem_type, threshold=None, class_names=None):
     """
     Evaluate model performance based on problem type.
+    
+    Parameters:
+    y_true: true labels
+    y_pred_or_proba: for regression: predictions; for classification: probabilities or predictions
+    problem_type: "classification" or "regression"
+    threshold: threshold for binary classification (if None, treats y_pred_or_proba as hard predictions)
+    class_names: class names for multi-class classification
     """
     metrics = {}
     
     if problem_type == "classification":
+        # Convert probabilities to predictions if threshold is provided
+        if threshold is not None and hasattr(y_pred_or_proba, 'shape') and len(y_pred_or_proba.shape) > 1:
+            # Binary classification with probabilities and threshold
+            if y_pred_or_proba.shape[1] == 2:
+                y_pred = (y_pred_or_proba[:, 1] > threshold).astype(int)
+            else:
+                # Multi-class: use argmax (threshold doesn't apply)
+                y_pred = np.argmax(y_pred_or_proba, axis=1)
+        elif hasattr(y_pred_or_proba, 'shape') and len(y_pred_or_proba.shape) > 1:
+            # Probabilities provided but no threshold: use argmax
+            y_pred = np.argmax(y_pred_or_proba, axis=1)
+        else:
+            # Hard predictions provided (1D array or list)
+            y_pred = np.array(y_pred_or_proba)
+        
         metrics['accuracy'] = accuracy_score(y_true, y_pred)
         try:
             metrics['precision'] = precision_score(y_true, y_pred, average='weighted', zero_division=0)
@@ -201,6 +223,8 @@ def evaluate_model(y_true, y_pred, problem_type):
             metrics['recall'] = recall_score(y_true, y_pred, average='weighted')
             metrics['f1'] = f1_score(y_true, y_pred, average='weighted')
     else:  # regression
+        # For regression, y_pred_or_proba should be predictions
+        y_pred = y_pred_or_proba
         metrics['r2'] = r2_score(y_true, y_pred)
         metrics['rmse'] = np.sqrt(mean_squared_error(y_true, y_pred))
         metrics['mae'] = mean_absolute_error(y_true, y_pred)

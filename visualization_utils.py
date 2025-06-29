@@ -13,7 +13,7 @@ def create_confusion_matrix(y_true, y_pred):
     """
     Create a confusion matrix visualization for classification problems.
     """
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(6, 4))
     
     # Calculate confusion matrix
     cm = confusion_matrix(y_true, y_pred)
@@ -72,7 +72,7 @@ def create_regression_plots(y_true, y_pred):
     """
     Create regression performance plots: actual vs predicted and residuals.
     """
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
     # Actual vs Predicted plot
     axes[0].scatter(y_true, y_pred, alpha=0.6, color='blue', edgecolors='black', linewidth=0.5)
@@ -105,7 +105,7 @@ def create_classification_distribution(y_true, y_pred):
     """
     Create classification performance visualization.
     """
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
     # True vs Predicted distribution
     unique_labels = np.unique(np.concatenate([y_true, y_pred]))
@@ -155,7 +155,7 @@ def create_data_overview_plots(df):
     """
     Create data overview plots for initial data exploration.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     
     # Missing values heatmap
     if df.isnull().sum().sum() > 0:
@@ -199,6 +199,56 @@ def create_data_overview_plots(df):
                    bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.5))
     axes[1, 1].set_title('Dataset Overview', fontsize=14, fontweight='bold')
     axes[1, 1].axis('off')
+    
+    plt.tight_layout()
+    return fig
+
+def create_probability_plots(y_true, y_pred_proba, class_names):
+    """
+    Create probability distribution plots for classification problems.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Plot 1: Prediction confidence distribution
+    max_probs = y_pred_proba.max(axis=1)
+    
+    axes[0].hist(max_probs, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+    axes[0].axvline(max_probs.mean(), color='red', linestyle='--', linewidth=2, 
+                    label=f'Mean: {max_probs.mean():.3f}')
+    axes[0].set_xlabel('Maximum Probability (Confidence)', fontsize=12)
+    axes[0].set_ylabel('Frequency', fontsize=12)
+    axes[0].set_title('Prediction Confidence Distribution', fontsize=14, fontweight='bold')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    
+    # Plot 2: Class probability distributions
+    if len(class_names) <= 5:  # Only show if we have 5 or fewer classes
+        for i, class_name in enumerate(class_names):
+            axes[1].hist(y_pred_proba[:, i], bins=20, alpha=0.6, 
+                        label=f'Class {class_name}', density=True)
+        
+        axes[1].set_xlabel('Predicted Probability', fontsize=12)
+        axes[1].set_ylabel('Density', fontsize=12)
+        axes[1].set_title('Probability Distribution by Class', fontsize=14, fontweight='bold')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+    else:
+        # For many classes, show average probabilities instead
+        avg_probs = y_pred_proba.mean(axis=0)
+        class_indices = np.arange(len(class_names))
+        
+        bars = axes[1].bar(class_indices, avg_probs, alpha=0.8, color='lightcoral')
+        axes[1].set_xlabel('Classes', fontsize=12)
+        axes[1].set_ylabel('Average Predicted Probability', fontsize=12)
+        axes[1].set_title('Average Probability by Class', fontsize=14, fontweight='bold')
+        axes[1].set_xticks(class_indices)
+        axes[1].set_xticklabels(class_names, rotation=45 if len(class_names) > 3 else 0)
+        axes[1].grid(True, alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, prob in zip(bars, avg_probs):
+            axes[1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                         f'{prob:.3f}', ha='center', va='bottom', fontsize=10)
     
     plt.tight_layout()
     return fig
