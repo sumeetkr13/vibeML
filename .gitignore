@@ -29,6 +29,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+ml_analyzer_env/
 
 # IDE
 .vscode/
@@ -69,4 +70,5 @@ logs/
 # Temporary files
 *.tmp
 temp/
-tmp/ 
+tmp/
+attached_assets/ 
